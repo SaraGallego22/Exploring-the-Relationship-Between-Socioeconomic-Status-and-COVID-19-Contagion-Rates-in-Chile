@@ -1,0 +1,916 @@
+---
+title: "PI2"
+output: html_document
+date: "2024-02-23"
+author: Sara Gallego Villada y Nicolás Alberto Moreno Reyes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE)
+```
+
+```{r libraries, include=FALSE}
+library(fda.usc)
+print("hola")
+```
+
+## IMPORTAR DATOS
+
+# WORKSPACE
+
+```{r}
+load("C:/Users/sara-/OneDrive - Universidad EAFIT/2024-1/PI2/datos_actualziados.RData")
+```
+
+## VARIABLES IMPORTANTES
+
+SE FILTRAN PARA DEJAR LAS COMUNAS CON LAS QUE VAMOS A TRABAJAR
+
+```{r}
+letal<-dataframe_prioridad_sin_nulos
+
+comunas_reales_2<- c('Vitacura', 'Las Condes', 'Providencia', 'Lo Barnechea', 'La Reina', 
+                   'Nunoa', 'San Miguel', 'Macul', 'Quilicura', 'Santiago', 'Huechuraba',
+                   'Maipu', 'La Florida', 'Penalolen', 'Puente Alto', 'Cerrillos', 
+                   'Pudahuel', 'La Cisterna', 'Renca', 'Pedro Aguirre Cerda', 
+                   'Estacion Central', 'La Granja', 'Quinta Normal', 'Independencia',
+                   'Recoleta', 'El Bosque', 'San Bernardo', 'San Joaquin', 'Lo Prado',
+                   'Conchali', 'San Ramon', 'Cerro Navia', 'Lo Espejo', 'La Pintana')
+
+# Filtrar el DataFrame para mantener solo las filas con valores permitidos en la primera columna
+datos_prioridad_comunas_reales <- subset(dataframe_prioridad_comunas, dataframe_prioridad_comunas$Comuna %in% comunas_reales)
+
+# Filtrar el DataFrame para solo dejar las comunas con valores en hacinamiento
+con_comunas <- subset(regiones_y_comunas, regiones_y_comunas$comuna_nom %in% comunas_reales)
+
+hacinamieto_comuna <- con_comunas$hacinamiento
+#Regresión de datos funcionales-<Parte matemática
+comunas_con_hacinamiento <- con_comunas$comuna_nom
+
+#Filtramos para solo dejar las comunas que tienen valor en hacinamiento
+datos_prioridad_comunas_hacinamiento <- subset(dataframe_prioridad_comunas, dataframe_prioridad_comunas$Comuna %in% comunas_con_hacinamiento)
+
+#Filtrar las de hacinamiento
+datos_con_hacinamiento <- subset(regiones_y_comunas, regiones_y_comunas$comuna_nom %in% comunas_con_hacinamiento)
+
+#Creanis un dataset con las comunas y su respectivo índice de hacinamiento y educación
+indice_comunas_hacinamiento <- cbind(con_comunas$comuna_nom,con_comunas$hacinamiento)
+indice_educacion_comuna <- cbind(con_comunas$comuna_nom,con_comunas$educ_sup_com)
+
+carencia_servicios_bas <- cbind(con_comunas$comuna_nom,con_comunas$carente_ser_bas)
+
+
+```
+
+Agregamos las columnas de hacinamiento y educación superior
+
+```{r}
+#Re nombramos las columnas de los indices de hacinamiento y educación  
+colnames(indice_comunas_hacinamiento)[2] <- "Hacinamiento"
+colnames(indice_comunas_hacinamiento)[1] <- "Comuna"
+
+
+colnames(indice_educacion_comuna)[2] <- "Educacion_sup"
+colnames(indice_educacion_comuna)[1] <- "Comuna"
+
+
+colnames(carencia_servicios_bas)[2] <- "Servicios"
+colnames(carencia_servicios_bas)[1] <- "Comuna"
+
+
+#Agregamos las columnas con índice de hacinamiento y educación superior por comuna
+
+datos_prioridad_comunas_hacinamiento <- merge(datos_prioridad_comunas_hacinamiento, indice_comunas_hacinamiento, by="Comuna", all.x=TRUE)
+
+# Repetimos el proceso para agregar los datos de educación superior.
+datos_prioridad_comunas_hacinamiento <- merge(datos_prioridad_comunas_hacinamiento, indice_educacion_comuna, by="Comuna", all.x=TRUE)
+
+datos_prioridad_comunas_hacinamiento <- merge(datos_prioridad_comunas_hacinamiento, carencia_servicios_bas, by="Comuna", all.x=TRUE)
+
+
+dactH=datos_prioridad_comunas_hacinamiento
+dact=datos_prioridad_comunas_hacinamiento
+dat=dias
+
+Prio=dact$Prioridad
+hacina = datos_prioridad_comunas_hacinamiento$Hacinamiento
+hacina=datos_prioridad_comunas_hacinamiento$Hacinamiento
+educa=datos_prioridad_comunas_hacinamiento$Educacion_sup
+carencia_ser=educa=datos_prioridad_comunas_hacinamiento$Servicios
+
+final_data <- datos_prioridad_comunas_hacinamiento
+```
+
+# SE ASIGNAN NÚMEROS A LAS PRIORIDADES
+
+Se asignan números a las prioridades de las comunas haciendo agrupaciones
+
+```{r}
+Prioaux=rep(0,length(Prio))
+Prioaux[Prio=="Sin Prioridad"]=1
+Prioaux[Prio=="Baja Prioridad"]=2
+Prioaux[Prio=="Media Baja Prioridad"]=3
+Prioaux[Prio=="Media Alta Prioridad"]=4
+Prioaux[Prio=="Alta Prioridad"]=5
+Prioaux=sort(Prioaux)
+Prioaux[Prioaux==1]="Sin Prioridad"
+Prioaux[Prioaux==2]="Baja Prioridad"
+Prioaux[Prioaux==3]="Media Baja Prioridad"
+Prioaux[Prioaux==4]="Media Alta Prioridad"
+Prioaux[Prioaux==5]="Alta Prioridad"
+datact=data.frame(
+  "prio"=Prioaux, 
+  "comuna" = dact$Comuna 
+  
+)
+```
+
+# SUAVIZADO
+
+Se realiza el suavizado a los datos funcionales para una mejor obtención de gráficas
+
+```{r}
+d.f=dact[,2:290]*1000
+row.names(d.f)=dact$Comuna
+fdact=fdata(d.f, argvals = dat$Dias, rangeval = c(1,1016))
+#suavizando
+out1<-optim.basis(fdact,type.CV=CV.S)
+bsp<-create.bspline.basis(fdact$rangeval,nbasis=out1$numbasis.opt)
+S.bsp  <-  S.basis(fdact$argvals, bsp)
+sfda<-fdact
+sfda$data<-fdact$data%*%S.bsp
+```
+
+# GRAFICA VELOCIDAD DE CONTAGIO
+
+```{r}
+x.d1 <- fdata.deriv(sfda)
+plot(x.d1)
+```
+
+# GRÁFICA CONTAGIOS
+
+```{r}
+
+plot(abs(sfda))
+#abline(h=0,lwd=2)
+
+plot(t(dat),dact[2,2:290],type = "l")
+for (i in 2:34){
+  lines(t(dat),dact[i,2:290],type = "l")}
+
+split.fdata<-function(x,f,drop=FALSE,...){
+  if (!is.factor(f)) f<-factor(f)
+  nlev<-nlevels(f)
+  lev<-levels(f)
+  if (is.matrix(x$data)) x$data<-data.frame(x$data)
+  if (is.fdata(x)) {
+    out<-split(x$data,f,drop=drop,...)
+  }
+  for (i in 1:nlev) out[[lev[i]]]<-fdata(out[[lev[i]]],x$argvals,x$rangeval,x$names)
+  out
+}
+```
+
+# TEST DE PERMUTACIÓN Se quiere ver si hay una diferencia significativa entre las comunas priorizadas y las no priorizadas
+
+```{r}
+Prioaux[Prio=="Sin Prioridad"]=0
+Prioaux[Prio=="Baja Prioridad"]=1
+Prioaux[Prio=="Media Baja Prioridad"]=1
+Prioaux[Prio=="Media Alta Prioridad"]=1
+Prioaux[Prio=="Alta Prioridad"]=1
+
+l1<-split.fdata(fdact,Prioaux)
+plot(l1[[1]],col=1,ylim=c(0,10),lty="dotted")
+lines(l1[[2]],col=2,lty="dotted")
+lines(mean(l1[[1]]),lwd=2,col=1)
+lines(mean(l1[[2]]),lwd=2,col=2)
+dev.off()
+temp.fd1=fdata2fd(l1[[1]])
+temp.fd2=fdata2fd(l1[[2]])
+
+#Test de permutación
+dif.test=tperm.fd(temp.fd1,temp.fd2,q=0.1) 
+for (i in 1:length(dif.test$Tvals)){
+  if (dif.test$Tvals[i] >= dif.test$qval){
+    abline(v=dif.test$argvals[i])
+    
+  }
+}
+dif.test=tperm.fd(temp.fd1,temp.fd2,q=0.1) 
+abline(v=50)
+abline(v=88)
+abline(v=326.7)
+#abline(v=341.6)
+#abline(v=380)
+abline(v=422)
+abline(v=599)
+abline(v=615.5)
+abline(v=713)
+abline(v=805)
+```
+
+# GRÁFICA CONTAGIOS CON RANGOS DE DIFERENCIA SIGNIFICATIVA DE CONTAGIOS ENTRE COMUNAS PRIORIZADAS Y NO PRIORIZADAS
+
+```{r}
+# Asignar colores según la prioridad
+# Asignar colores según la prioridad
+Prioaux[Prio=="Sin Prioridad"] = 0
+Prioaux[Prio=="Baja Prioridad"] = 1
+Prioaux[Prio=="Media Baja Prioridad"] = 1
+Prioaux[Prio=="Media Alta Prioridad"] = 1 
+Prioaux[Prio=="Alta Prioridad"] = 1
+
+colors <- ifelse(Prioaux == 0, "blue", "red")
+
+# Plot con colores y leyenda
+plot(abs(sfda), col = colors, main = "Contagions by communes with priority and without priority")
+abline(v=50)
+abline(v=88)
+abline(v=326.7)
+abline(v=422)
+abline(v=599)
+abline(v=615.5)
+abline(v=713)
+abline(v=805)
+
+# Añadir línea punteada en la posición 280 y etiquetarla
+abline(v=280, col="orange", lty=2)
+text(280, max(abs(sfda)), "Vaccination", pos=4, col="green", cex=0.7)
+
+# Añadir leyenda
+legend("topright", legend=c("Non-prioritized", "Prioritized"), fill=c("blue", "red"))
+```
+
+# GRÁFICA VELOCIDAD POR PRIORIDAD
+
+```{r}
+Prioaux[Prio=="Sin Prioridad"]=0
+Prioaux[Prio=="Baja Prioridad"]=1
+Prioaux[Prio=="Media Baja Prioridad"]=1
+Prioaux[Prio=="Media Alta Prioridad"]=1
+Prioaux[Prio=="Alta Prioridad"]=1
+
+l1<-split.fdata(x.d1,Prioaux)
+
+#dev.off()
+plot(l1[[1]],col=1,ylim=c(-0.4,0.4),lty="dotted")
+lines(l1[[2]],col=2,lty="dotted")
+lines(mean(l1[[1]]),lwd=2,col=1)
+lines(mean(l1[[2]]),lwd=2,col=2)
+
+```
+
+# TEST DE PERMUTACIÓN VELOCIDADES DE CONTAGIO
+
+```{r}
+temp.fd1=fdata2fd(l1[[1]])
+temp.fd2=fdata2fd(l1[[2]])
+
+#Test de permutación
+dif.test=tperm.fd(temp.fd1,temp.fd2,q=0.1) 
+for (i in 1:length(dif.test$Tvals)){
+  if (dif.test$Tvals[i] >= dif.test$qval){
+    abline(v=dif.test$argvals[i])
+    
+  }
+}
+dif.test=tperm.fd(temp.fd1,temp.fd2,q=0.1) 
+abline(v=50);
+abline(v=88);
+abline(v=326.7);
+#abline(v=341.6)
+#abline(v=380)
+abline(v=422);
+abline(v=599);
+abline(v=615.5);
+abline(v=713);
+abline(v=805);
+```
+
+# Análisis con hacinamiento
+
+```{r}
+# Asignar colores según la prioridad
+
+
+Hacinamiento <- rep(0, length(hacina))
+
+
+
+# hasta 0.01 - sin hacinamiento; ---> 0
+Hacinamiento[hacina <= 0.01] <- 0
+
+# de 0.01 a 0.04 - hacinamiento medio; ----> 1
+Hacinamiento[hacina > 0.01] <- 1
+
+# más de 0.04 - hacinamiento crítico. ----> 2
+#Hacinamiento[hacina > 0.04] <- 2
+
+
+
+colors <- ifelse(Hacinamiento == 0, "blue", "red")
+        
+
+
+# Plot con colores y leyenda
+plot(abs(sfda), col = colors, main = "Contagios por comunas con diferencia de hacinamiento")
+
+# Añadir leyenda
+legend("topright",
+       legend = c("Sin Hacinamiento", "Hacinamiento Medio"), # Texto de la leyenda
+       fill = c("blue", "red")) # Colores correspondientes
+
+# Añadir línea punteada en la posición 280 y etiquetarla
+abline(v=280, col="orange", lty=2)
+
+```
+
+# Velocidades de contagio por clasificación de hacinamiento
+
+```{r}
+Hacinamiento <- rep(0, length(hacina))
+
+
+
+# hasta 0.01 - sin hacinamiento; ---> 0
+Hacinamiento[hacina <= 0.01] <- 0
+
+# de 0.01 a 0.04 - hacinamiento medio; ----> 1
+Hacinamiento[hacina > 0.01] <- 1
+
+# más de 0.04 - hacinamiento crítico. ----> 2
+#Hacinamiento[hacina > 0.04] <- 2
+
+
+
+colors <- ifelse(Hacinamiento == 0, "blue", "red")
+        
+
+
+# Plot con colores y leyenda
+plot(abs(x.d1), col = colors, main = "Contagion speed by crowding classification")
+
+# Añadir leyenda
+legend("topright",
+       legend = c("No overcrowding", "Medium/critical overcrowding"), # Texto de la leyenda
+       fill = c("blue", "red")) # Colores correspondientes
+
+# Añadir línea punteada en la posición 280 y etiquetarla
+abline(v=280, col="orange", lty=2)
+```
+
+# Test de permutación hacinamiento y contagios
+
+```{r}
+
+l1<-split.fdata(x.d1,Hacinamiento)
+temp.fd1=fdata2fd(l1[[1]])
+temp.fd2=fdata2fd(l1[[2]])
+
+#Test de permutación
+dif.test=tperm.fd(temp.fd1,temp.fd2,q=0.1) 
+for (i in 1:length(dif.test$Tvals)){
+  if (dif.test$Tvals[i] >= dif.test$qval){
+    abline(v=dif.test$argvals[i])
+    
+  }
+}
+dif.test=tperm.fd(temp.fd1,temp.fd2,q=0.1) 
+
+```
+
+# Diferencia de medias hacinamiento y velocidad de contagio
+
+```{r}
+
+l1<-split.fdata(x.d1,Hacinamiento)
+temp.fd1=fdata2fd(l1[[1]])
+temp.fd2=fdata2fd(l1[[2]])
+
+#Test de permutación
+dif.test=tperm.fd(temp.fd1,temp.fd2,q=0.1) 
+for (i in 1:length(dif.test$Tvals)){
+  if (dif.test$Tvals[i] >= dif.test$qval){
+    abline(v=dif.test$argvals[i])
+    
+  }
+}
+dif.test=tperm.fd(temp.fd1,temp.fd2,q=0.1) 
+```
+
+# Intento prepración de datos
+
+```{r}
+# Ejemplo simplificado de cómo podrías calcular el promedio de contagios para cada comuna
+# Asumiendo que 'sfda' es una matriz con 27 filas (comunas) y 289 columnas (días)
+promedio_contagios = apply(dact[2:200],1,mean)
+datos_x.d1 <- x.d1$data
+
+# Convierte los datos en una matriz
+matriz_x.d1 <- as.matrix(datos_x.d1)
+promedio_velocidad = apply(matriz_x.d1[,1:289],1,mean)
+promedio_velocidad <- as.vector(promedio_velocidad)
+
+#promedio_contagios <- apply(sfda, 1, mean) # Calcula el promedio para cada 
+carencia_ser = as.numeric(carencia_ser)
+
+hacina = as.numeric(hacina)
+
+modelo_regresion <- lm(promedio_velocidad ~ hacina + carencia_ser)
+
+# Muestra el resumen del modelo
+summary(modelo_regresion)
+
+```
+
+# Carencia servicios básicos
+
+```{r}
+#promedio_contagios <- apply(sfda, 1, mean) # Calcula el promedio para cada 
+carencia_ser = as.numeric(carencia_ser)
+
+modelo_regresion <- lm(promedio_contagios ~ carencia_ser)
+
+# Muestra el resumen del modelo
+summary(modelo_regresion)
+```
+# Regresión
+
+
+
+# Covarianza entre contagio y ducación superior, hacinamiento
+
+```{r}
+# Extraemos las columnas relevantes de hacinamiento y contagios
+indices_hacinamiento <- as.numeric(final_data$Hacinamiento)
+indices_educacion <- as.numeric(final_data$Educacion_sup)
+
+# Calculamos la covarianza entre los contagios y los índices de hacinamiento
+cov_contagios_hacinamiento <- cov(sfda$data, indices_hacinamiento)
+
+# Calculamos la covarianza entre los contagios y los índices de educación
+cov_contagios_educacion <- cov(sfda$data, indices_educacion)
+
+
+plot(cov_contagios_hacinamiento)
+plot(cov_contagios_educacion)
+
+
+```
+
+# Covarianza entre velocidad de contagio y ducación superior, hacinamiento
+
+```{r}
+indices_hacinamiento <- as.numeric(final_data$Hacinamiento)
+indices_educacion <- as.numeric(final_data$Educacion_sup)
+
+# Calculamos la covarianza entre los contagios y los índices de hacinamiento
+cov_contagios_hacinamiento <- cov(x.d1$data, indices_hacinamiento)
+
+# Calculamos la covarianza entre los contagios y los índices de educación
+cov_contagios_educacion <- cov(x.d1$data, indices_educacion)
+
+# Imprimimos los resultados
+plot(cov_contagios_hacinamiento)
+plot(cov_contagios_educacion)
+```
+
+# Covarianza entre la velocidad de contagio y los índices de hacinamiento
+
+```{r}
+datos <- data.frame(Contagios = x.d1$data, Hacinamiento = indices_hacinamiento)
+
+cov_mat <- cov(datos)
+
+
+plot(cov_mat, main = "Matriz de Covarianza")
+
+```
+
+# Primero necesitas transformar estos datos a un formato funcional si no lo están
+
+```{r}
+contagios_fd <- smooth.basis(dat$Dias, t(as.matrix(final_data[,2:290])), fdParobj=fdPar(create.fourier.basis(range(dat$Dias), nbasis=20)))
+
+# Extrayendo el vector de hacinamiento
+hacinamiento <- as.numeric(hacina)
+educacion <- as.numeric(educa)
+
+# Configurando las covariables para la regresión (incluyendo un intercepto)
+covariables <- list(intercepto = rep(1, nrow(final_data)), hacinamiento = hacinamiento)
+conbasis <- create.constant.basis(range(dat$Dias))
+betalist <- list(conbasis, create.fourier.basis(range(dat$Dias), nbasis=25))
+
+# Ejecutando la regresión funcional
+resultados <- fRegress.fd(contagios_fd$fd, covariables,betalist=betalist, wt=NULL,returnMatrix = FALSE,method=c('fRegress', 'model'),CVobs=1:N)
+
+#std_regres <- fRegress.stderr(resultados,resultados$y2cMap,resultados$SigmaE,returnMatrix = FALSE,)
+# Ejecutando la regresión funcional
+
+# Extraer y visualizar resultados
+beta_estimados <- resultados$betaest
+summary(resultados)
+
+beta_estimados_hacinamiento <- resultados$betaest
+
+# Acceder a la base funcional y a los coeficientes para el hacinamiento
+basis_hacina <- resultados$betaest[[2]]$fd$basis
+coefs_hacina <- resultados$betaest[[2]]$fd$coefs
+
+# Crear el objeto fd para el efecto del hacinamiento
+fd_hacinamiento <- fd(coefs_hacina, basis_hacina)
+summary(fd_hacinamiento)
+
+# Graficar el efecto del hacinamiento
+plot(fd_hacinamiento, xlab="Dia", ylab="Efecto del indice de hacinamiento en los contagios")
+```
+
+# P_values de eefcto del hacinamiento en los contagios
+
+```{r}
+coeficientes <- resultados$betaestlist[[2]]$fd$coefs
+coeficientes <- rbind(resultados$betaestlist[[1]]$fd$coefs,coeficientes)
+
+# Obtener el número de observaciones
+N <- length(resultados$wt)
+
+# Calcular la desviación estándar de los coeficientes
+coef_std <- sqrt(diag(resultados$Cmatinv))
+
+# Calcular el estadístico t para cada coeficiente
+t_stats <- coeficientes / coef_std
+
+# Calcular los p-valores para los coeficientes
+p_values <- 2 * (1 - pt(abs(t_stats), df = N - length(coeficientes)))
+
+# Mostrar los coeficientes, los t-stats y los p-valores
+resultados_summary <- data.frame(coeficientes, coef_std, t_stats, p_values)
+rownames(resultados_summary) <- names(coeficientes)
+print(resultados_summary)
+
+```
+
+```{r}
+beta_estimados_hacinamiento <- resultados$betaest
+
+# Extraer la matriz de penalización y varianzas-covarianzas
+Cmatinv <- solve(resultados$Cmat)
+sigmaHat <- diag(Cmatinv) / length(dat$Dias)
+
+# Obtener los errores estándar de los coeficientes
+stderrlist <- lapply(resultados$betaest, function(beta) {
+  basisobj <- beta$fd$basis
+  nbasis <- basisobj$nbasis
+  sqrt(diag(Cmatinv[1:nbasis, 1:nbasis]))
+})
+
+# Calcular los p-values
+p_values_hacina <- sapply(2:length(stderrlist), function(i) {
+  coefs <- resultados$betaest[[i]]$fd$coefs
+  stderr <- stderrlist[[i]]
+  2 * (1 - pnorm(abs(coefs / stderr)))
+})
+
+# Mostrar los p-values
+#print(p_values)
+coefs_hacina <- resultados$betaestlist[[2]]$fd$coefs
+resultados_summary_hacina <- data.frame(coefs_hacina, p_values_hacina)
+names = c("Coeficiente", "p_values")
+rownames(resultados_summary_hacina) <- names(names)
+print(resultados_summary_hacina)
+```
+
+
+# Interpretación de gráfico:
+
+*Eje X (Día):* Representa el tiempo. Va de 0 a 1016.
+
+*Eje Y (Efecto del Hacinamiento en Contagios):* Muestra la magnitud y la dirección del efecto que el hacinamiento tiene en los contagios. Los valores positivos indican un aumento en los contagios con el aumento del hacinamiento, y los valores negativos indican una disminución en los contagios con el aumento del hacinamiento.
+
+*La línea en el gráfico:* Es la función estimada que describe cómo cambia el efecto del hacinamiento en los contagios a lo largo del tiempo. La forma de la línea es una combinación de funciones sinusoidales y cosinusoidales debido a que se utilizó una base de Fourier para estimar estos efectos.
+
+*Variación temporal:* Hay una variación clara a lo largo del tiempo en el efecto del hacinamiento sobre los contagios, lo que indica que este efecto no es constante.
+
+*Pico y valles:* Parece haber un pico prominente que indica que en cierto punto, el efecto del hacinamiento sobre los contagios fue positivo y bastante significativo. Esto es seguido por un valle donde el efecto se vuelve negativo.
+
+*Cruce por cero:* El efecto cruza la línea de cero varias veces, lo que indica que hay momentos en los cuales el hacinamiento no tiene un efecto estadísticamente significativo sobre los contagios.
+
+# Regresión velocidad de contagios y hacinamiento
+
+```{r}
+velocidad_fd <- smooth.basis(dat$Dias, t(as.matrix(x.d1$data[,1:289])), fdParobj=fdPar(create.fourier.basis(range(dat$Dias), nbasis=20)))
+
+# Extrayendo el vector de hacinamiento
+hacinamiento <- as.numeric(hacina)
+educacion <- as.numeric(educa)
+
+# Configurando las covariables para la regresión (incluyendo un intercepto)
+covariables_velocidad <- list(intercepto = rep(1, nrow(final_data)), hacinamiento = hacinamiento )
+conbasis <- create.constant.basis(range(dat$Dias))
+betalist <- list(conbasis, create.fourier.basis(range(dat$Dias), nbasis=20))
+
+# Ejecutando la regresión funcional
+regresion_velocidad_hacinamiento <- fRegress(velocidad_fd$fd, covariables_velocidad, betalist=betalist)
+
+# Ejecutando la regresión funcional
+
+# Extraer y visualizar resultados
+beta_estimados_velocidad_hacinamiento <- regresion_velocidad_hacinamiento$betaest
+summary(regresion_velocidad_hacinamiento)
+
+# Acceder a la base funcional y a los coeficientes para el hacinamiento
+basis_reg_velo_hacina <- regresion_velocidad_hacinamiento$betaest[[2]]$fd$basis
+coefs_velo_hacina <- regresion_velocidad_hacinamiento$betaest[[2]]$fd$coefs
+
+# Crear el objeto fd para el efecto del hacinamiento
+fd_velo_hacinamiento <- fd(coefs_velo_hacina, basis_reg_velo_hacina)
+summary(regresion_velocidad_hacinamiento)
+
+# Graficar el efecto del hacinamiento
+plot(fd_velo_hacinamiento, xlab="Day", ylab="Effect of the overcrowding index on the speed of contagion")
+```
+# Tabla efecto del hacinamiento en la velocidad de contagio
+```{r}
+coeficientes_velo_hacina <- regresion_velocidad_hacinamiento$betaestlist[[2]]$fd$coefs
+coeficientes_velo_hacina <- rbind(regresion_velocidad_hacinamiento$betaestlist[[1]]$fd$coefs,coeficientes_velo_hacina)
+
+# Obtener el número de observaciones
+N <- length(regresion_velocidad_hacinamiento$wt)
+
+# Calcular la desviación estándar de los coeficientes
+coef_std_velo_hacina <- sqrt(diag(regresion_velocidad_hacinamiento$Cmatinv))
+
+# Calcular el estadístico t para cada coeficiente
+t_stats_velo_hacina <- coeficientes_velo_hacina / coef_std_velo_hacina
+
+# Calcular los p-valores para los coeficientes
+# Obtener el número de coeficientes
+num_coeficientes <- ncol(coeficientes_velo_hacina)
+
+# Calcular los p-valores para los coeficientes con los grados de libertad correctos
+p_values_velo_hacina <- 2 * (1 - pt(abs(t_stats_velo_hacina), df = N - num_coeficientes))
+
+# Mostrar los coeficientes, los t-stats y los p-valores
+resultados_summary_velo_hacina <- data.frame(coeficientes_velo_hacina, coef_std_velo_hacina, t_stats_velo_hacina, p_values_velo_hacina)
+rownames(resultados_summary_velo_hacina) <- names(coeficientes_velo_hacina)
+print(resultados_summary_velo_hacina)
+```
+a
+```{r}
+library(fda)
+
+# Configuración inicial
+velocidad_fd <- smooth.basis(dat$Dias, t(as.matrix(x.d1$data[,1:289])), fdParobj=fdPar(create.fourier.basis(range(dat$Dias), nbasis=20)))
+hacinamiento <- as.numeric(hacina)
+covariables_velocidad <- list(intercepto = rep(1, nrow(final_data)), hacinamiento = hacinamiento)
+conbasis <- create.constant.basis(range(dat$Dias))
+betalist <- list(conbasis, create.fourier.basis(range(dat$Dias), nbasis=20))
+
+# Ejecutar la regresión funcional
+regresion_velocidad_hacinamiento <- fRegress(velocidad_fd$fd, covariables_velocidad, betalist=betalist)
+
+# Extraer y visualizar resultados
+beta_estimados_velocidad_hacinamiento <- regresion_velocidad_hacinamiento$betaest
+
+# Extraer la matriz de penalización y varianzas-covarianzas
+Cmatinv <- solve(regresion_velocidad_hacinamiento$Cmat)
+sigmaHat <- diag(Cmatinv) / length(dat$Dias)
+
+# Obtener los errores estándar de los coeficientes
+stderrlist <- lapply(regresion_velocidad_hacinamiento$betaest, function(beta) {
+  basisobj <- beta$fd$basis
+  nbasis <- basisobj$nbasis
+  sqrt(diag(Cmatinv[1:nbasis, 1:nbasis]))
+})
+
+# Calcular los p-values
+p_values <- sapply(2:length(stderrlist), function(i) {
+  coefs <- regresion_velocidad_hacinamiento$betaest[[i]]$fd$coefs
+  stderr <- stderrlist[[i]]
+  2 * (1 - pnorm(abs(coefs / stderr)))
+})
+
+# Mostrar los p-values
+print(p_values)
+coefs_velo_hacina <- regresion_velocidad_hacinamiento$betaestlist[[2]]$fd$coefs
+resultados_summary_velo_hacina <- data.frame(coefs_velo_hacina, p_values)
+names = c("Coeficiente", "p_values")
+rownames(resultados_summary_velo_hacina) <- names(names)
+print(resultados_summary_velo_hacina)
+
+```
+
+# Regresión contagios y nivel de educación 
+
+```{r}
+contagios_fd <- smooth.basis(dat$Dias, t(as.matrix(final_data[,2:290])), fdParobj=fdPar(create.fourier.basis(range(dat$Dias), nbasis=20)))
+
+# Extrayendo el vector de hacinamiento
+educacion <- as.numeric(educa)
+
+# Configurando las covariables para la regresión (incluyendo un intercepto)
+covariables2 <- list(intercepto = rep(1, nrow(final_data)), educacion = educacion )
+conbasis <- create.constant.basis(range(dat$Dias))
+betalist <- list(conbasis, create.fourier.basis(range(dat$Dias), nbasis=20))
+
+# Ejecutando la regresión funcional
+resultados_educ <- fRegress(contagios_fd$fd, covariables2, betalist=betalist)
+
+# Ejecutando la regresión funcional
+
+# Extraer y visualizar resultados
+beta_estimados_educ <- resultados$betaest
+summary(resultados_educ)
+
+# Acceder a la base funcional y a los coeficientes para el hacinamiento
+basis_educ <- resultados_educ$betaest[[2]]$fd$basis
+coefs_educ <- resultados_educ$betaest[[2]]$fd$coefs
+
+# Crear el objeto fd para el efecto del hacinamiento
+fd_hacinamiento <- fd(coefs_educ, basis_educ)
+
+# Graficar el efecto del hacinamiento
+plot(fd_hacinamiento, xlab="Dia", ylab="Efecto del nivel de educacion en los contagios")
+```
+# P_values para nivel de educación
+```{r}
+contagios_fd <- smooth.basis(dat$Dias, t(as.matrix(final_data[,2:290])), fdParobj=fdPar(create.fourier.basis(range(dat$Dias), nbasis=20)))
+
+coeficientes_educ <- resultados_educ$betaestlist[[2]]$fd$coefs
+coeficientes_educ2 <- rbind(resultados_educ$betaestlist[[1]]$fd$coefs,coeficientes_educ)
+
+# Obtener el número de observaciones
+N <- length(resultados_educ$wt)
+
+# Calcular la desviación estándar de los coeficientes
+coef_std_educ <- sqrt(diag(resultados_educ$Cmatinv))
+
+# Calcular el estadístico t para cada coeficiente
+t_stats_educ <- coeficientes_educ2 / coef_std_educ
+
+# Calcular los p-valores para los coeficientes
+p_values_educ <- 2 * (1 - pt(abs(t_stats_educ), df = N - length(coeficientes_educ2)))
+
+# Mostrar los coeficientes, los t-stats y los p-valores
+resultados_educ_summary <- data.frame(coeficientes_educ2, coef_std_educ, t_stats_educ, p_values_educ)
+rownames(resultados_educ_summary) <- names(coeficientes_educ2)
+print(resultados_educ_summary)
+```
+# Regresión velocidad de contagio y educación
+```{r}
+velocidad_fd <- smooth.basis(dat$Dias, t(as.matrix(x.d1$data[,1:289])), fdParobj=fdPar(create.fourier.basis(range(dat$Dias), nbasis=21)))
+
+# Extrayendo el vector de hacinamiento
+hacinamiento <- as.numeric(hacina)
+educacion <- as.numeric(educa)
+
+# Configurando las covariables para la regresión (incluyendo un intercepto)
+covariables_velocidad_educ <- list(intercepto = rep(1, nrow(final_data)), educacion = educacion )
+conbasis <- create.constant.basis(range(dat$Dias))
+betalist <- list(conbasis, create.fourier.basis(range(dat$Dias), nbasis=21))
+
+# Ejecutando la regresión funcional
+regresion_velocidad_educ <- fRegress(velocidad_fd$fd, covariables_velocidad_educ, betalist=betalist)
+
+# Ejecutando la regresión funcional
+
+# Extraer y visualizar resultados
+beta_estimados_velocidad_educ <- regresion_velocidad_educ$betaest
+summary(regresion_velocidad_educ)
+
+# Acceder a la base funcional y a los coeficientes para el hacinamiento
+basis_reg_velo_educ <- regresion_velocidad_educ$betaest[[2]]$fd$basis
+coefs_velo_educ <- regresion_velocidad_educ$betaest[[2]]$fd$coefs
+
+# Crear el objeto fd para el efecto del hacinamiento
+fd_velo_educ <- fd(coefs_velo_educ, basis_reg_velo_educ)
+summary(regresion_velocidad_educ)
+
+# Graficar el efecto del hacinamiento
+plot(fd_velo_educ, xlab="Day", ylab="Effect of the level of education on the speed of contagion")
+```
+# P_values relación entre velocidad de contagio y nivel de educación
+
+```{r}
+# Extraer y visualizar resultados
+beta_estimados_velocidad_educ <- regresion_velocidad_educ$betaest
+
+# Extraer la matriz de penalización y varianzas-covarianzas
+Cmatinv <- solve(regresion_velocidad_educ$Cmat)
+sigmaHat <- diag(Cmatinv) / length(dat$Dias)
+
+# Obtener los errores estándar de los coeficientes
+stderrlist <- lapply(regresion_velocidad_educ$betaest, function(beta) {
+  basisobj <- beta$fd$basis
+  nbasis <- basisobj$nbasis
+  sqrt(diag(Cmatinv[1:nbasis, 1:nbasis]))
+})
+
+# Calcular los p-values
+p_values_educ <- sapply(2:length(stderrlist), function(i) {
+  coefs <- regresion_velocidad_educ$betaest[[i]]$fd$coefs
+  stderr <- stderrlist[[i]]
+  2 * (1 - pnorm(abs(coefs / stderr)))
+})
+
+# Mostrar los p-values
+#print(p_values_educ)
+coefs_velo_educ <- regresion_velocidad_educ$betaest[[2]]$fd$coefs
+resultados_summary_velo_educ <- data.frame(coefs_velo_educ, p_values_educ)
+names = c("Coeficiente", "p_values")
+rownames(resultados_summary_velo_educ) <- names(names)
+print(resultados_summary_velo_educ)
+```
+
+
+# Analizando datos antes de la vacunación:
+
+```{r}
+contagios_fd_prevac <- smooth.basis(dat$Dias[1:90], t(as.matrix(x.d1$data[,2:91])), fdParobj=fdPar(create.fourier.basis(range(dat$Dias[1:90]), nbasis=20)))
+
+# Configurando las covariables para la regresión (incluyendo un intercepto)
+covariables2 <- list(intercepto = rep(1, nrow(final_data[,2:91])), hacinamiento = hacinamiento )
+conbasis <- create.constant.basis(range(dat$Dias[1:90]))
+betalist_prevac <- list(conbasis, create.fourier.basis(range(dat$Dias[1:90]), nbasis=20))
+
+# Ejecutando la regresión funcional
+resultados_pre_vac <- fRegress(contagios_fd_prevac$fd, covariables2, betalist=betalist_prevac)
+
+# Ejecutando la regresión funcional
+
+# Extraer y visualizar resultados
+beta_estimados_educ_prevac <- resultados_pre_vac$betaest
+summary(resultados_pre_vac)
+
+# Acceder a la base funcional y a los coeficientes para el hacinamiento
+basis_educ_pre_vac <- resultados_pre_vac$betaest[[2]]$fd$basis
+coefs_educ_pre_vac <- resultados_pre_vac$betaest[[2]]$fd$coefs
+
+# Crear el objeto fd para el efecto del hacinamiento
+fd_educa_pre_vac <- fd(coefs_educ_pre_vac, basis_educ_pre_vac)
+
+# Graficar el efecto del hacinamiento
+plot(fd_educa_pre_vac, xlab="Dia", ylab="Effect of the level of crowding on the speed of infection before vaccination")
+```
+# P_values pre-vacunación
+```{r}
+# Extraer la matriz de penalización y varianzas-covarianzas
+Cmatinv <- solve(resultados_pre_vac$Cmat)
+sigmaHat <- diag(Cmatinv) / length(dat$Dias)
+
+# Obtener los errores estándar de los coeficientes
+stderrlist <- lapply(resultados_pre_vac$betaest, function(beta) {
+  basisobj <- beta$fd$basis
+  nbasis <- basisobj$nbasis
+  sqrt(diag(Cmatinv[1:nbasis, 1:nbasis]))
+})
+
+# Calcular los p-values
+p_values_prevac <- sapply(2:length(stderrlist), function(i) {
+  coefs <- resultados_pre_vac$betaest[[i]]$fd$coefs
+  stderr <- stderrlist[[i]]
+  2 * (1 - pnorm(abs(coefs / stderr)))
+})
+
+# Mostrar los p-values
+#print(p_values_educ)
+coefs_velo_prevac <- resultados_pre_vac$betaest[[2]]$fd$coefs
+resultados_summary_velo_prevac <- data.frame(coefs_velo_prevac, p_values_prevac)
+names = c("Coeficiente", "p_values")
+rownames(resultados_summary_velo_prevac) <- names(names)
+print(resultados_summary_velo_prevac)
+```
+
+
+# Relación entre hacinamiento y educación
+```{r}
+modelo <- lm(educa ~ hacina, data = dat)
+
+# Mostrar un resumen del modelo
+summary(modelo)
+educa = as.numeric(educa)
+modelo2 <- lm(hacina ~ educa, data = dat)
+
+# Mostrar un resumen del modelo
+summary(modelo2)
+
+```
+
+# Relación entre índice de hacinamiento y priorización en las comunas 
+
+```{r}
+Prioaux = as.numeric(Prioaux)
+tabla_contingencia <- table(Hacinamiento, Prioaux)
+library(ggplot2)
+
+ggplot(dact, aes(x = factor(Hacinamiento), fill = factor(Prioaux))) +
+  geom_bar(position = "dodge") +
+  labs(x = "Overcrowding Classification",
+       y = "Amount",
+       fill = "Priority Classification") +
+  theme_minimal() +
+  ggtitle("Relationship between Priority Classification and Overcrowding in Communes")
+```
+
