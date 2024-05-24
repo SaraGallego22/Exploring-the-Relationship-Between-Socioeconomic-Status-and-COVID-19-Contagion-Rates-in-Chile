@@ -1,0 +1,2 @@
+# Exploring-the-Relationship-Between-Socioeconomic-Status-and-COVID-19-Contagion-Rates-in-Chile
+This project aims to analyze the correlation between COVID-19 infection rates and various socioeconomic factors in Santiago, Chile, from 2020 to 2022. The study focuses on understanding how housing conditions, education levels, and other relevant variables influence the speed and spread of COVID-19 across different communes in the city.
